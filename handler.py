@@ -40,10 +40,10 @@ def upload_to_bunny(data: bytes, content_type: str, extension: str) -> str:
 
 # Kokoro's own punctuation timing is unreliable (see hexgrad/kokoro#59, #202),
 # so pause length is enforced here explicitly via silence padding instead.
-COMMA_PAUSE_S = 0.15    # comma
-SENTENCE_PAUSE_S = 0.35 # . ! ?
-TENSION_PAUSE_S = 0.55  # ellipsis / dash (hesitation, tension)
-LONG_PAUSE_S = 0.9      # paragraph break (new thought)
+COMMA_PAUSE_S = 0.045    # comma
+SENTENCE_PAUSE_S = 0.105 # . ! ?
+TENSION_PAUSE_S = 0.165  # ellipsis / dash (hesitation, tension)
+LONG_PAUSE_S = 0.27      # paragraph break (new thought)
 
 # Split into segments, each tagged with the pause that should follow it.
 SEGMENT_PATTERN = re.compile(r"(\.\.\.|[,.!?]|\n\s*\n)")
