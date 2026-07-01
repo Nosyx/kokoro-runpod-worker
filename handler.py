@@ -1,5 +1,6 @@
 import io
 import os
+import random
 import time
 import uuid
 
@@ -17,6 +18,18 @@ BUNNY_STORAGE_ZONE = os.environ.get("BUNNY_STORAGE_ZONE", "videocrm")
 BUNNY_ACCESS_KEY = os.environ.get("BUNNY_ACCESS_KEY")
 BUNNY_PULL_ZONE_URL = os.environ.get("BUNNY_PULL_ZONE_URL", "https://videocrm.b-cdn.net")
 BUNNY_STORAGE_HOST = os.environ.get("BUNNY_STORAGE_HOST", "storage.bunnycdn.com")
+
+# Kokoro has no pitch/prosody knob, only `speed`. A fixed speed makes long narration sound
+# mechanically even, so this jitters it slightly per phoneme-length chunk instead of using
+# one flat value — subtle enough to stay natural-sounding, not slow it down or add pauses.
+JITTER_RANGE = (0.97, 1.03)
+
+
+def jittered_speed(base_speed: float):
+    def speed_fn(_phoneme_len: int) -> float:
+        return base_speed * random.uniform(*JITTER_RANGE)
+
+    return speed_fn
 
 
 def upload_to_bunny(data: bytes, content_type: str, extension: str) -> str:
@@ -47,7 +60,7 @@ def handler(job):
         return {"error": "Missing 'text' in input"}
 
     audio_chunks = []
-    for _, _, audio in pipeline(text, voice=voice, speed=speed):
+    for _, _, audio in pipeline(text, voice=voice, speed=jittered_speed(speed)):
         audio_chunks.append(audio)
 
     full_audio = np.concatenate(audio_chunks)
