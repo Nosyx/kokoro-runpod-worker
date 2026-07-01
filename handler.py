@@ -1,6 +1,5 @@
 import io
 import os
-import re
 import time
 import uuid
 
@@ -38,62 +37,6 @@ def upload_to_bunny(data: bytes, content_type: str, extension: str) -> str:
     return f"{BUNNY_PULL_ZONE_URL.rstrip('/')}/{remote_path}"
 
 
-# Kokoro's own punctuation timing is unreliable (see hexgrad/kokoro#59, #202),
-# so pause length is enforced here explicitly via silence padding instead.
-COMMA_PAUSE_S = 0.045    # comma
-SENTENCE_PAUSE_S = 0.105 # . ! ?
-TENSION_PAUSE_S = 0.165  # ellipsis / dash (hesitation, tension)
-LONG_PAUSE_S = 0.27      # paragraph break (new thought)
-
-# Split into segments, each tagged with the pause that should follow it.
-SEGMENT_PATTERN = re.compile(r"(\.\.\.|[,.!?]|\n\s*\n)")
-
-
-def silence(seconds: float) -> np.ndarray:
-    return np.zeros(int(seconds * SAMPLE_RATE), dtype=np.float32)
-
-
-def split_with_pauses(text: str):
-    """Yield (segment_text, trailing_pause_seconds) pairs."""
-    parts = SEGMENT_PATTERN.split(text)
-    segment = ""
-    for part in parts:
-        if part is None or part == "":
-            continue
-        if SEGMENT_PATTERN.fullmatch(part):
-            if "\n" in part:
-                pause = LONG_PAUSE_S
-            elif part in ("...", "-", "—"):
-                pause = TENSION_PAUSE_S
-            elif part == ",":
-                pause = COMMA_PAUSE_S
-            else:  # . ! ?
-                pause = SENTENCE_PAUSE_S
-            cleaned = segment.strip()
-            if cleaned:
-                yield cleaned, pause
-            segment = ""
-        else:
-            segment += part
-    cleaned = segment.strip()
-    if cleaned:
-        yield cleaned, 0.0
-
-
-def synthesize(text: str, voice: str, speed: float) -> np.ndarray:
-    chunks = []
-    for segment_text, pause_s in split_with_pauses(text):
-        for _, _, audio in pipeline(segment_text, voice=voice, speed=speed):
-            chunks.append(audio)
-        if pause_s > 0:
-            chunks.append(silence(pause_s))
-
-    if not chunks:
-        return silence(0.1)
-
-    return np.concatenate(chunks)
-
-
 def handler(job):
     job_input = job["input"]
     text = job_input.get("text")
@@ -103,7 +46,11 @@ def handler(job):
     if not text:
         return {"error": "Missing 'text' in input"}
 
-    full_audio = synthesize(text, voice, speed)
+    audio_chunks = []
+    for _, _, audio in pipeline(text, voice=voice, speed=speed):
+        audio_chunks.append(audio)
+
+    full_audio = np.concatenate(audio_chunks)
     duration_ms = round(len(full_audio) / SAMPLE_RATE * 1000)
 
     buffer = io.BytesIO()
